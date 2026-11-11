@@ -1,0 +1,21 @@
+{
+  "name": "Penalty Kicks",
+  "genre": "sports",
+  "dim": "3D",
+  "mode": "Party",
+  "players": "2–8",
+  "hook": "Pick your corner. Hope the keeper guesses wrong.",
+  "how": "Two teams take turns from the spot. The kicker aims and times a power bar while the keeper picks a dive, both in secret, then the kick shows who guessed right. Five each, then sudden death; everyone takes a turn kicking and in goal.",
+  "controls": "Kicker: mouse or arrows to aim, hold and release Space or click for power · Keeper: ← ↓ → · touch: drag to aim, hold KICK; DIVE buttons",
+  "uses": [
+    ["Hidden info", "Your aim or dive goes only to the host's browser, which shows both picks together when the kick happens."],
+    ["Host-run rounds", "The host's browser runs the turns, the timer and the score; if it leaves, the next player takes over and everyone re-sends their pick."],
+    ["Bots", "Bots fill the teams and each kicks and dives with its own favorite side."],
+    ["Leaderboard", "Total goals scored, for every player."]
+  ],
+  "ideas": [
+    "Add a golden goal ball worth two in the last round",
+    "Let the keeper dive high or low too, not just left and right",
+    "Make it a snowy night match with the crowd waving flags"
+  ]
+}
