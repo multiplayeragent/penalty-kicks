@@ -50,6 +50,7 @@
   td:first-child, th:first-child { text-align: left; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   td i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; } tr.me td { color: #ffd23f; font-weight: 700; }
   .card ol { text-align: left; margin: 0; padding-left: 26px; font-size: 14px; min-height: 22px; } .card li span { float: right; font-variant-numeric: tabular-nums; }
+  .card li.note { list-style: none; margin-left: -26px; opacity: .8; } /* a message in place of a list: no "1." in front of it */
   .card p { margin: 8px 0 0; font-size: 13px; opacity: .8; }
   button.again { width: 100%; min-height: 48px; margin-top: 14px; border: 0; border-radius: 12px; background: #ffd23f; color: #3a2000; font: 800 17px system-ui, sans-serif; cursor: pointer; }
 </style>
@@ -73,7 +74,7 @@
 <div id="over" hidden><div class="card">
   <h2 id="winner"></h2><div id="final"></div>
   <table id="stats"></table>
-  <h3>Most goals scored</h3><ol id="board"><li>Loading…</li></ol>
+  <h3>Most goals scored</h3><ol id="board"><li class="note">Loading…</li></ol>
   <button class="again" id="again">Play again</button><p id="next"></p>
 </div></div>
 <script type="module">
@@ -700,8 +701,15 @@ function ballAt(res, a) {
 function keeperAt(res, a, now) {
   if (!res || a < STRIKE - 80) return { x: Math.sin(now / 420) * 0.35, y: 0, tilt: 0, reach: 0 };
   const e = clamp((a - STRIKE + 80) / 420, 0, 1), k = 1 - Math.pow(1 - e, 3);
-  if (res.dv === 0) { const up = res.r === "save" && res.ay > 0.55 ? Math.sin(e * Math.PI) * 0.6 : 0; return { x: 0, y: up, tilt: 0, reach: k }; }
-  const tx = res.r === "save" ? res.ax * GW - res.dv * 1.7 : res.dv * 2.3, ty = res.r === "save" ? clamp(res.ay * GH - 0.7, 0, 1.3) : 0.55; // tilted over, the gloves are ~1.8m out
+  const bx = res.ax * GW, by = res.ay * GH; // where the kick crosses the line
+  if (res.dv === 0) { // stayed: a save off to one side is a step across to it
+    const up = res.r === "save" && res.ay > 0.55 ? Math.sin(e * Math.PI) * 0.6 : 0, step = res.r === "save" && Math.abs(bx) > 0.7 ? (bx - Math.sign(bx) * 0.7) * k : 0;
+    return { x: step, y: up, tilt: 0, reach: k };
+  }
+  // tilted over, the gloves are ~1.8m out. A save: the gloves meet the ball. Otherwise the dive stays inside the posts,
+  // and when it went the ball's way the ball beats it over the top (a low dive) or underneath (a high one)
+  const sameWay = res.r !== "save" && Math.sign(bx) === res.dv && Math.abs(bx) < 3.1;
+  const tx = res.r === "save" ? bx - res.dv * 1.7 : res.dv * 1.1, ty = res.r === "save" ? clamp(by - 0.7, 0, 1.3) : sameWay ? (by > 1.1 ? 0 : 1.35) : 0.55;
   return { x: tx * k, y: Math.sin(e * Math.PI) * 0.4 + ty * k, tilt: -res.dv * 1.25 * k, reach: k };
 }
 /** The kicker: run-up from the side, the strike, the follow-through, then a celebration or hands on head. */
@@ -727,7 +735,8 @@ function kickFx(res, a, now) {
     else { sfx("ooh"); hype[1 - kt] = 1.2; }
     const calls = { goal: ["GOAL!", "#3ddc84"], save: ["SAVED!", "#ffd23f"], post: ["OFF THE POST!", "#ff9a3d"], bar: ["OFF THE BAR!", "#ff9a3d"], wide: ["WIDE!", "#ff4d4d"], over: ["OVER THE BAR!", "#ff4d4d"] };
     const [t, c] = calls[res.r] || ["MISS", "#fff"];
-    say(t, `${nameOf(res.kicker)} went ${spotName(res.aimX, res.aimY)} · ${nameOf(res.keeper)} ${res.dv === 0 ? "stayed put" : `dove ${res.dv < 0 ? "left" : "right"}`}`, c, 2400);
+    const who = (id) => (id === net.sessionId ? "You" : nameOf(id));
+    say(t, `${who(res.kicker)} went ${spotName(res.aimX, res.aimY)} · ${who(res.keeper)} ${res.dv === 0 ? "stayed put" : `dove ${res.dv < 0 ? "left" : "right"}`}`, c, 2400);
   }
 }
 const spotName = (ax, ay) => `${ay > 0.6 ? "high " : ay < 0.3 ? "low " : ""}${ax < -0.33 ? "left" : ax > 0.33 ? "right" : "down the middle"}`;
@@ -763,6 +772,7 @@ function drawWorld(g, dt, now) {
   const ku = kf.userData, stride = Math.sin(kp.run) * 0.8;
   ku.legs[0].rotation.x = stride; ku.legs[1].rotation.x = kp.swing ? -kp.swing * 1.5 + 0.4 : -stride; ku.arms[0].rotation.set(-stride * 0.6, 0, -kp.swing * 0.5); ku.arms[1].rotation.set(stride * 0.6, 0, kp.swing * 0.8);
   ku.rig.rotation.set(0, 0, 0); ku.rig.position.y = 0;
+  if (ku.tag) ku.tag.visible = !showRes; // during the kick the camera is right behind the kicker: its name would cover the goal
   if (showRes && a > STRIKE + 1100) celebrate(kf, showRes.r === "goal", now);
   const gp = keeperAt(showRes, a, now), gf = figure(r.keeper, 1 - r.kt, true, colorOf(g, r.keeper), labelOf(r.keeper)), gu = gf.userData;
   gf.position.set(gp.x, gp.y, 0.35); gf.rotation.set(0, 0, gp.tilt); gu.rig.position.y = 0;
@@ -890,11 +900,11 @@ function nextTurn(g) {
 }
 function showBoard(goals) {
   const list = $("board");
-  if (!board) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
-  list.innerHTML = "<li>Loading…</li>";
+  if (!board) { list.innerHTML = `<li class="note">Leaderboards need a connection.</li>`; return; }
+  list.innerHTML = `<li class="note">Loading…</li>`;
   (goals > 0 ? board.submit(goals, "inc").catch(() => null) : Promise.resolve()).then(() => board.top(10)).then(({ entries }) => {
-    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score}</span></li>`).join("") : "<li>No goals yet. Score the first.</li>";
-  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score}</span></li>`).join("") : `<li class="note">No goals yet. Score the first.</li>`;
+  }).catch(() => { list.innerHTML = `<li class="note">Couldn't load the leaderboard.</li>`; });
 }
 $("again").onclick = () => { const g = game(); if (g && g.phase === "over") { myReady = g.id; net.me.set("rdy", g.id); } };
 /** Two players picked the same color at once (the joiner's first state can be empty): the later sessionId picks again. */
@@ -928,7 +938,7 @@ addEventListener("blur", () => { keys.clear(); me.charging = false; });
 cv.addEventListener("pointerdown", (e) => {
   e.preventDefault(); unlockAudio();
   if (myRole(game()) !== "kick" || me.pick) return;
-  if (e.pointerType === "mouse") { aimAtPointer(e.clientX, e.clientY); startCharge(); return; }
+  if (e.pointerType === "mouse") { if (e.button === 0) { aimAtPointer(e.clientX, e.clientY); startCharge(); } return; }
   if (!drag) { drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); }
 });
 cv.addEventListener("pointermove", (e) => {
@@ -944,6 +954,7 @@ kickBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropa
 for (const ev of ["pointerup", "pointercancel"]) kickBtn.addEventListener(ev, () => releaseCharge());
 for (const b of $("keepUI").querySelectorAll("button")) b.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); unlockAudio(); dive(+b.dataset.dv); });
 document.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
+cv.addEventListener("contextmenu", (e) => e.preventDefault()); // a right-click doesn't open the browser menu over the game
 
 // ── MAIN LOOP ───────────────────────────────────────────────────────────────────────
 let last = performance.now(), lastReal = performance.now(), lastHb = 0, lastHud = 0;
