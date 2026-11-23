@@ -29,7 +29,7 @@ Without a key it still runs, offline against bots.
 ## How it is built
 
 - One `index.html`, plus three.js in `libs/`. The comment at the top of the script maps the code and explains the multiplayer.
-- **Hidden info:** Your aim or dive goes only to the host's browser, which shows both picks together when the kick happens. Nothing about a pick is in the shared state until then.
+- **Hidden info:** Your aim or dive is a message to the host's browser, never part of the shared state; only the host's browser reads it, and every screen shows both picks together when the kick happens. (A relay room passes every message to every browser, so a player who opens the browser's developer tools could read it: for picks nobody can peek at, the host would need server logic.)
 - **Host-run rounds:** The host's browser runs the turns, the timer and the score; if it leaves, the next player takes over and everyone re-sends their pick.
 - **Bots:** Bots fill the teams and each kicks and dives with its own favorite side.
 - **Leaderboard:** Total goals scored, for every player.

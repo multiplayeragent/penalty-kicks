@@ -108,7 +108,8 @@
  *              result), `marks` = each team's goals and misses. `v` goes up on every write.
  *       `clk`: the host's clock, twice a second (for the countdown).
  *   - THE PICKS ARE SECRET. The kicker sends "pick" {k, role:"kick", ax, ay, pw}, the keeper "pick" {k,
- *     role:"keep", dv}, straight to the host, which keeps them in its own memory: they never go into
+ *     role:"keep", dv}, to the host, which keeps them in its own memory (the room relays the message to every
+ *     browser; only the host's reads it, and a pick is locked once sent): they never go into
  *     shared state until both are in (or time runs out). Then the host works out the result and writes
  *     both picks together in `res`, so every screen plays the same kick. A host that takes over starts
  *     with no picks, so it clears `ack` and every player re-sends its pick for this kick.
@@ -504,9 +505,7 @@ function checkSeats(g) {
 }
 /** A new kick: the clock starts; nobody has picked. */
 function startKick(g, k, T) {
-  host.picks = { gid: g.id, k, kick: null, keep: null };
-  const r = roles({ ...g, k });
-  host.botAt = { kick: isBot(r.kicker) ? T + rand(CONFIG.botPickMs) : 0, keep: isBot(r.keeper) ? T + rand(CONFIG.botPickMs) : 0 };
+  host.picks = { gid: g.id, k, kick: null, keep: null }; host.botAt = null; // (hostPick times the bots)
   return writeGame({ ...g, phase: "pick", k, endsAt: T + CONFIG.pickMs, ack: { k: 0, g: 0, h: net.sessionId }, res: null });
 }
 const rand = ([a, b]) => a + Math.random() * (b - a);
@@ -529,7 +528,10 @@ function hostTick(dt, now) {
 function hostPick(g, T) {
   if (!host.picks || host.picks.k !== g.k || host.picks.gid !== g.id) { host.picks = { gid: g.id, k: g.k, kick: null, keep: null }; host.botAt = null; }
   const r = roles(g), P = host.picks;
-  if (!host.botAt) host.botAt = { kick: isBot(r.kicker) ? T + rand(CONFIG.botPickMs) : 0, keep: isBot(r.keeper) ? T + rand(CONFIG.botPickMs) : 0 };
+  // when each bot locks in its pick; again if a bot takes the place of someone who left mid-pick (never after the clock)
+  const B = host.botAt || (host.botAt = {}), botTime = (id) => (isBot(id) ? Math.min(T + rand(CONFIG.botPickMs), g.endsAt - 300) : 0);
+  if (B.kickBy !== r.kicker) { B.kickBy = r.kicker; B.kick = botTime(r.kicker); }
+  if (B.keepBy !== r.keeper) { B.keepBy = r.keeper; B.keep = botTime(r.keeper); }
   if (P.kick && P.kick.by !== r.kicker) P.kick = null; // the kicker changed (someone took a bot's place)
   if (P.keep && P.keep.by !== r.keeper) P.keep = null;
   if (!P.kick && isBot(r.kicker) && host.botAt.kick && T >= host.botAt.kick) P.kick = { by: r.kicker, ...botKick(r.kicker, g) };
